@@ -271,10 +271,13 @@ class BiliUidCrack:
         Returns:
             int: hashcat输出文件中已破解的UID，若无则返回-1。
         """
-        with open(outfile, 'r', encoding='utf-8') as fp:
+        with open(outfile, 'rb') as fp:
             hex_uid = fp.read().strip()
-        if hex_uid != '':
-            return int(''.join([hex_uid[x] for x in range(1, len(hex_uid), 2)]))
+        if hex_uid != b'':
+            if 0 < hex_uid[0] < 10:
+                return int(''.join([str(x) for x in range(len(hex_uid))]))
+            else:
+                return int(''.join([hex_uid[x] for x in range(1, len(hex_uid), 2)]))
         else:
             return -1
 
@@ -327,10 +330,6 @@ class BiliUidCrack:
     def crack_from_md5(self, md5: str, is_standard_md5: bool, uid_ranges: List[UidRange] = UID_RANGES_ALL) -> int:
         """根据MD5破解UID。
 
-        当UID范围小于1,000,000,000时优先使用john进行破解，因为虽然hashcat破解速度更快，
-        但hashcat初始化时间较长，john初始化很快，当进行少量计算时john的总用时更短，速度更快。
-        当UID范围大于1,000,000,000时优先使用hashcat进行破解。
-
         若hashcat不可用则尝试john进行破解，反之，若john不可用时则尝试hashcat，当两者
         均不可用时抛出异常NoAvailableCrackerException。
 
@@ -362,7 +361,7 @@ class BiliUidCrack:
 
             maskfile = BiliUidCrack.__generate_temp_hashcat_mask_file(masks_and_charsets)
 
-            hashcat_cmd = f"\"{self.__hashcat}\" -m 0 -a 3 {'' if is_standard_md5 else '--hex-charset'} --outfile-format 3 --outfile-autohex-disable --outfile \"{outfile}\" {'--backend-ignore-cuda' if self.__backend_ignore_cuda else ''} --potfile-disable --logfile-disable -O -w 4 --hwmon-disable {md5} \"{maskfile}\""
+            hashcat_cmd = f"\"{self.__hashcat}\" -m 0 -a 3 {'' if is_standard_md5 else '--hex-charset'} --outfile-format 2 --outfile-autohex-disable --outfile \"{outfile}\" {'--backend-ignore-cuda' if self.__backend_ignore_cuda else ''} --potfile-disable --logfile-disable -O -w 4 --hwmon-disable {md5} \"{maskfile}\""
             process = subprocess.run(shlex.split(hashcat_cmd), cwd=os.path.split(self.__hashcat)[0])
 
             if os.path.exists(maskfile):

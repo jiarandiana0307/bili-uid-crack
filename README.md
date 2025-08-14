@@ -33,12 +33,12 @@ cd bili-uid-crack
 
 - 方法二：下载项目压缩包
 
-点击[此链接](https://github.com/jiarandiana0307/bili-uid-crack/archive/refs/heads/master.zip)下载项目压缩包，完成后解压。
+点击[此链接](https://github.com/jiarandiana0307/bili-uid-crack/archive/refs/heads/main.zip)下载项目压缩包，完成后解压。
 
 解压完成后进入项目目录
 
 ```bash
-cd bili-uid-crack-master
+cd bili-uid-crack-main
 ```
 
 ### 第2步：安装项目依赖库

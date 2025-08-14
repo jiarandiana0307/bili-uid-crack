@@ -68,7 +68,9 @@ def get_hashcat_executable(hashcat: Optional[str] = None) -> str:
         path, name = os.path.split(hashcat)
         if path == '':
             path = None
-        hashcat_abspath = shutil.which(name, path=path)
+        hashcat = shutil.which(name, path=path)
+        if hashcat:
+            hashcat_abspath = os.path.abspath(hashcat)
 
     if hashcat_abspath is None or not os.popen(f'{hashcat_abspath} --version').read().startswith('v'):
         raise HashcatNotFoundException('未找到hashcat程序' + str(hashcat))
@@ -92,7 +94,9 @@ def get_john_executable(john: Optional[str] = None) -> str:
         path, name = os.path.split(john)
         if path == '':
             path = None
-        john_abspath = shutil.which(name, path=path)
+        john = shutil.which(name, path=path)
+        if john:
+            john_abspath = os.path.abspath(john)
 
     if john_abspath is None or not os.popen(john_abspath).read().startswith('John the Ripper'):
         raise JohnNotFoundException('未找到john程序' + str(john))

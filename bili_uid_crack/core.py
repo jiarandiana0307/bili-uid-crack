@@ -271,13 +271,16 @@ class BiliUidCrack:
         Returns:
             int: hashcat输出文件中已破解的UID，若无则返回-1。
         """
-        with open(outfile, 'rb') as fp:
-            hex_uid = fp.read().strip()
-        if hex_uid != b'':
-            if 0 < hex_uid[0] < 10:
-                return int(''.join([str(hex_uid[x]) for x in range(len(hex_uid))]))
+        with open(outfile, 'r', encoding='utf-8') as fp:
+            uid = fp.read().strip()
+        if uid != '':
+            prefix = '$HEX['
+            suffix = ']'
+            if uid.startswith(prefix) and uid.endswith(suffix):
+                uid = uid[len(prefix):-len(suffix)]
+                return int(''.join([str(uid[x]) for x in range(1, len(uid), 2)]))
             else:
-                return int(hex_uid.decode('utf-8'))
+                return int(uid)
         else:
             return -1
 
@@ -371,7 +374,7 @@ class BiliUidCrack:
                 if platform.system() == 'Windows' and uid_range.end < uid_threshold:
                     workload_profile = 1
 
-                hashcat_cmd = f"\"{self.__hashcat}\" -m 0 -a 3 {'' if is_standard_md5 else '--hex-charset'} --outfile-format 2 --outfile-autohex-disable --outfile \"{outfile}\" {'--backend-ignore-cuda' if self.__backend_ignore_cuda else ''} --potfile-disable --logfile-disable -O -w {workload_profile} --hwmon-disable {md5} \"{maskfile}\""
+                hashcat_cmd = f"\"{self.__hashcat}\" -m 0 -a 3 {'' if is_standard_md5 else '--hex-charset'} --outfile-format 2 --outfile \"{outfile}\" {'--backend-ignore-cuda' if self.__backend_ignore_cuda else ''} --potfile-disable --logfile-disable -O -w {workload_profile} --hwmon-disable {md5} \"{maskfile}\""
                 process = subprocess.run(shlex.split(hashcat_cmd), cwd=os.path.split(self.__hashcat)[0])
                 returncode = process.returncode
 

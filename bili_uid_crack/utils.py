@@ -3,10 +3,11 @@ import os
 import shutil
 import hashlib
 import platform
-from typing import Optional
+from typing import List, Optional
 from urllib.parse import urlparse, parse_qs
 
 from .exceptions import *
+from .uid_range import UidRange
 
 
 def check_md5(md5: Optional[str]) -> bool:
@@ -132,3 +133,28 @@ def uid_to_md5(uid: int, is_standard_md5: bool) -> str:
         return hashlib.md5(str(uid).encode('ascii')).hexdigest()
     else:
         return hashlib.md5(bytes([int(x) for x in str(uid)])).hexdigest()
+
+def merge_uid_ranges(uid_ranges: List[UidRange]) -> List[UidRange]:
+    """合并重叠的UID范围。
+
+    Args:
+        uid_ranges (List[UidRange]): UID范围的列表。
+
+    Returns:
+        List[UidRange]: 合并后的UID范围的列表。
+    """
+    if len(uid_ranges) < 1:
+        return []
+    
+    sorted_ranges = sorted(uid_ranges, key=lambda x: x.start)
+    merged = [sorted_ranges[0]]
+    
+    for current_start, current_end in sorted_ranges[1:]:
+        last_start, last_end = merged[-1]
+        if current_start <= last_end:
+            new_end = max(last_end, current_end)
+            merged[-1] = UidRange(last_start, new_end)
+        else:
+            merged.append(UidRange(current_start, current_end))
+
+    return merged

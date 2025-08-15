@@ -124,6 +124,7 @@ def main():
     uid_ranges = []
     try:
         uid_ranges = get_uid_ranges_from_args(args)
+        uid_ranges = merge_uid_ranges(uid_ranges)
     except Exception as e:
         print(e)
         return

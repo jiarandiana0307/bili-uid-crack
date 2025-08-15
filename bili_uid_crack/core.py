@@ -428,6 +428,8 @@ class BiliUidCrack:
         if not check_md5(md5):
             return -1
 
+        uid_ranges = merge_uid_ranges(uid_ranges)
+
         uid = -1
         status = False
         if self.__hashcat:

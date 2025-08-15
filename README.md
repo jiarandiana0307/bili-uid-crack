@@ -131,7 +131,7 @@ python bili_uid_crack_cli.py --url "https://www.bilibili.com/video/BV1vQ4y1Z7C2/
 
 1\. 已知`vd_source`是标准MD5
 
-使用`-s`或`--standard`参数指定传入标准MD5。
+使用`-s`或`--standard`参数指定传入标准MD5
 
 ```bash
 python bili_uid_crack_cli.py --md5 c9c39ea43db536f5fc895e71c18e3a48 --standard
@@ -139,7 +139,7 @@ python bili_uid_crack_cli.py --md5 c9c39ea43db536f5fc895e71c18e3a48 --standard
 
 2\. 已知`vd_source`是非标准MD5
 
-使用`-ns`或`--non-standard`参数指定传入非标准MD5。
+使用`-ns`或`--non-standard`参数指定传入非标准MD5
 
 ```bash
 python bili_uid_crack_cli.py --md5 59b2b2238efdc2ce7c9c270be38e38d2 --non-standard
@@ -190,13 +190,15 @@ python bili_uid_crack_cli.py --uid 594527616
 
 - 自定义UID范围进行破解
 
+使用`--range 1 1000000000`参数指定UID在1到1000000000进行破解
+
 ```bash
 python bili_uid_crack_cli.py --md5 c9c39ea43db536f5fc895e71c18e3a48 --range 1 1000000000
 ```
 
 为了加快破解速度，本工具内置了目前所有已知的UID号段，囊括了1到10位以及16位的UID，涵盖460,000,000,000个UID，最大UID为3,546,700,000,000,000。所以一般使用默认的UID分布范围就足够了，除非能知道UID位于哪个号段，或想判断UID是否在某个号段内，亦或是B站启用了新的号码段，这就可以使用`--range`参数显式指定UID范围。
 
-工具内置的UID分布范围定义可见于项目根目录`cracker`文件夹下的`constants.py`文件。
+工具内置的UID分布范围定义可见于项目根目录`bili_uid_crack`文件夹下的`constants.py`文件。
 
 ## 用法及参数
 

@@ -367,7 +367,9 @@ class BiliUidCrack:
             for uid_range in splited_uid_ranges:
                 masks_and_charsets = BiliUidCrack.get_masks_and_charsets(is_standard_md5, uid_range)
                 maskfile = BiliUidCrack.__generate_temp_hashcat_mask_file(masks_and_charsets)
-                workload_profile = 1 if uid_range.end < uid_threshold else 4
+                workload_profile = 4
+                if platform.system() == 'Windows' and uid_range.end < uid_threshold:
+                    workload_profile = 1
 
                 hashcat_cmd = f"\"{self.__hashcat}\" -m 0 -a 3 {'' if is_standard_md5 else '--hex-charset'} --outfile-format 2 --outfile-autohex-disable --outfile \"{outfile}\" {'--backend-ignore-cuda' if self.__backend_ignore_cuda else ''} --potfile-disable --logfile-disable -O -w {workload_profile} --hwmon-disable {md5} \"{maskfile}\""
                 process = subprocess.run(shlex.split(hashcat_cmd), cwd=os.path.split(self.__hashcat)[0])

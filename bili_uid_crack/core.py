@@ -275,9 +275,9 @@ class BiliUidCrack:
             hex_uid = fp.read().strip()
         if hex_uid != b'':
             if 0 < hex_uid[0] < 10:
-                return int(''.join([str(x) for x in range(len(hex_uid))]))
+                return int(''.join([str(hex_uid[x]) for x in range(len(hex_uid))]))
             else:
-                return int(''.join([hex_uid[x] for x in range(1, len(hex_uid), 2)]))
+                return int(hex_uid.decode('utf-8'))
         else:
             return -1
 
@@ -341,8 +341,6 @@ class BiliUidCrack:
             is_standard_md5 (bool): 指定是否为标准的MD5值。
             uid_ranges (List[UidRange], optional): 指定破解的UID范围，默认为所有可能的UID。
         """
-        uid_threshold = 1_000_000_000
-
         def hashcat_crack() -> Tuple[bool, int]:
             """运行hashcat进行破解。
 
@@ -355,24 +353,37 @@ class BiliUidCrack:
             with NamedTemporaryFile('w', encoding='utf-8', suffix='.txt', prefix='hashcat_outfile_', delete=False) as outfile_fp:
                 outfile = outfile_fp.name
 
-            masks_and_charsets = {}
+            uid_threshold = 10_000_000_000
+            splited_uid_ranges = []
             for uid_range in uid_ranges:
-                masks_and_charsets.update(BiliUidCrack.get_masks_and_charsets(is_standard_md5, uid_range))
+                if uid_range.start < uid_threshold and uid_range.end >= uid_threshold:
+                    # 将包含UID阈值的范围拆分为小于和大等于该阈值的范围
+                    splited_uid_ranges.append(UidRange(uid_range.start, uid_threshold-1))
+                    splited_uid_ranges.append(UidRange(uid_threshold, uid_range.end))
+                else:
+                    splited_uid_ranges.append(uid_range)
 
-            maskfile = BiliUidCrack.__generate_temp_hashcat_mask_file(masks_and_charsets)
+            returncode = 0
+            for uid_range in splited_uid_ranges:
+                masks_and_charsets = BiliUidCrack.get_masks_and_charsets(is_standard_md5, uid_range)
+                maskfile = BiliUidCrack.__generate_temp_hashcat_mask_file(masks_and_charsets)
+                workload_profile = 1 if uid_range.end < uid_threshold else 4
 
-            hashcat_cmd = f"\"{self.__hashcat}\" -m 0 -a 3 {'' if is_standard_md5 else '--hex-charset'} --outfile-format 2 --outfile-autohex-disable --outfile \"{outfile}\" {'--backend-ignore-cuda' if self.__backend_ignore_cuda else ''} --potfile-disable --logfile-disable -O -w 4 --hwmon-disable {md5} \"{maskfile}\""
-            process = subprocess.run(shlex.split(hashcat_cmd), cwd=os.path.split(self.__hashcat)[0])
+                hashcat_cmd = f"\"{self.__hashcat}\" -m 0 -a 3 {'' if is_standard_md5 else '--hex-charset'} --outfile-format 2 --outfile-autohex-disable --outfile \"{outfile}\" {'--backend-ignore-cuda' if self.__backend_ignore_cuda else ''} --potfile-disable --logfile-disable -O -w {workload_profile} --hwmon-disable {md5} \"{maskfile}\""
+                process = subprocess.run(shlex.split(hashcat_cmd), cwd=os.path.split(self.__hashcat)[0])
+                returncode = process.returncode
 
-            if os.path.exists(maskfile):
-                os.remove(maskfile)
+                if os.path.exists(maskfile):
+                    os.remove(maskfile)
 
-            uid = BiliUidCrack.__read_uid_from_hashcat_outfile(outfile)
+                uid = BiliUidCrack.__read_uid_from_hashcat_outfile(outfile)
+                if returncode not in [0, 1] or uid > 0:
+                    break
 
             if os.path.exists(outfile):
                 os.remove(outfile)
 
-            return (True, uid) if process.returncode in [0, 1] else (False, -1)
+            return (True, uid) if returncode in [0, 1] else (False, -1)
 
         def john_crack() -> Tuple[bool, int]:
             """运行john进行破解。

@@ -6,6 +6,8 @@ import platform
 from typing import List, Optional
 from urllib.parse import urlparse, parse_qs
 
+import curl_cffi
+
 from .exceptions import *
 from .uid_range import UidRange
 
@@ -158,3 +160,44 @@ def merge_uid_ranges(uid_ranges: List[UidRange]) -> List[UidRange]:
             merged.append(UidRange(current_start, current_end))
 
     return merged
+
+
+def query_uid_with_md5(md5: str, **kwargs) -> int:
+    """使用aicu.cc查询MD5对应的UID。
+
+    Args:
+        md5 (str): 待查询的16进制MD5。
+        **kwargs: curl_cffi.request()的参数。
+
+    Raises:
+        Exception: aicu.cc查询服务异常。
+
+    Returns:
+        int: 返回查询得到的UID，若无则返回-1。
+    """
+    uid = -1
+    url = f'https://api.aicu.cc/api/v3/tool/hash2uid?hash={md5}'
+    response = curl_cffi.get(url, impersonate='chrome110', **kwargs)
+    response.raise_for_status()
+
+    if response.text != '':
+        uid = int(response.json()['data']['uid'])
+
+    return uid
+
+
+def query_uid_with_url(url: str, **kwargs) -> int:
+    """使用aicu.cc查询URL中MD5对应的UID。
+
+    Args:
+        url (str): 网页端频链接或视频分享链接。
+        **kwargs: curl_cffi.request()的参数。
+
+    Returns:
+        int: 返回查询得到的UID，若无则返回-1。
+    """
+    if not check_crackable_url(url):
+        return -1
+
+    md5 = get_vd_source_from_url(url)
+    return query_uid_with_md5(md5, **kwargs)

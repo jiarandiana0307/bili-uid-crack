@@ -1,12 +1,16 @@
 # bili-uid-crack B站视频链接UID破解工具
 
-使用hashcat和（或）John the Ripper破解B站网页端视频链接或视频分享链接得到视频分享者的UID。
+使用在线查询aicu.cc接口或本地运行hashcat和（或）John the Ripper破解B站网页端视频链接或视频分享链接得到视频分享者的UID。
 
 简单地说，在登录B站网页端的情况下，B站视频页面的浏览器地址栏中的链接会自动加上一个`vd_source`参数，点击视频分享按钮时得到的视频分享链接也会有这个参数，这个参数其实是当前用户UID的16进制MD5值，本工具正是通过遍历计算UID的MD5值进行MD5碰撞，最终破解得到UID的。
 
 但是，点击分享按钮得到的链接和浏览器地址栏链接的`vd_source`参数值是不一样的，其原因是两者计算得到MD5的方法不同，前者是UID通过标准的方法计算得到的标准MD5值，而后者是UID通过一种不常规的方法计算得到的非标准MD5值。
 
-本工具同时支持使用hashcat和（或）John the Ripper进行破解，优先使用hashcat破解，若hashcat不可用则使用John the Ripper破解，但是John the Ripper只能用于破解标准MD5值。
+本工具支持两种方法破解：
+
+1. 在线调用aicu.cc网站的接口，直接查询MD5对应的UID。但请勿频繁查询aicu.cc接口，否则可能被风控。
+
+2. 在本地离线运行hashcat和（或）John the Ripper进行破解，优先使用hashcat破解，若hashcat不可用则使用John the Ripper破解，但是John the Ripper只能用于破解标准MD5值。
 
 ## 运行要求
 
@@ -111,23 +115,43 @@ hashcat -I
 
 ### 第4步：运行破解脚本
 
-- 根据B站链接破解UID
+#### 根据B站链接破解UID
 
 以破解以下视频分享链接为例：
 
 `https://www.bilibili.com/video/BV1vQ4y1Z7C2/?share_source=copy_web&vd_source=c9c39ea43db536f5fc895e71c18e3a48`
 
-运行脚本命令
+- 在线查询aicu.cc接口破解
+
+```bash
+python bili_uid_crack_cli.py --aicu --url "https://www.bilibili.com/video/BV1vQ4y1Z7C2/?share_source=copy_web&vd_source=c9c39ea43db536f5fc895e71c18e3a48"
+```
+
+注意：请勿频繁查询aicu.cc接口，否则可能被风控。
+
+- 离线本地破解
 
 ```bash
 python bili_uid_crack_cli.py --url "https://www.bilibili.com/video/BV1vQ4y1Z7C2/?share_source=copy_web&vd_source=c9c39ea43db536f5fc895e71c18e3a48"
 ```
 
-- 根据`vd_source`参数MD5值破解UID
+#### 根据`vd_source`参数MD5值破解UID
 
-`vd_source`参数可能是标准MD5和非标准MD5，所以对MD5的破解分几种情况：
+`vd_source`参数可能是标准MD5和非标准MD5。以`UID:594527616`为例，其标准MD5是`c9c39ea43db536f5fc895e71c18e3a48`，非标准MD5是`59b2b2238efdc2ce7c9c270be38e38d2`。
 
-以`UID:594527616`为例，其标准MD5是`c9c39ea43db536f5fc895e71c18e3a48`，非标准MD5是`59b2b2238efdc2ce7c9c270be38e38d2`。
+- 在线查询aicu.cc接口破解
+
+此方法无须关心`vd_source`参数是否为标准MD5，查询标准MD5或非标准MD5都能得到一样的UID。
+
+```bash
+python bili_uid_crack_cli.py --aicu --md5 c9c39ea43db536f5fc895e71c18e3a48
+```
+
+注意：此方法仅能查询已存在账号的UID，若查询的MD5对应的UID是一个不存在的B站账号则无法得到结果。而且此方法时效性有限，当有新UID生成但aicu.cc没有及时加入数据库时，也可能会导致无法查询得到结果。
+
+- 离线本地破解
+
+使用离线破解时，MD5的破解分几种情况：
 
 1\. 已知`vd_source`是标准MD5
 
@@ -203,8 +227,8 @@ python bili_uid_crack_cli.py --md5 c9c39ea43db536f5fc895e71c18e3a48 --range 1 10
 ## 用法及参数
 
 ```
-usage: bili_uid_crack_cli.py [-h] [-u URL] [-m MD5] [-s] [-ns] [-r RANGE RANGE] [--uid UID] [--hashcat HASHCAT]
-                      [--backend-ignore-cuda] [--john JOHN] [-o OUTFILE]
+usage: bili_uid_crack_cli.py [-h] [-u URL] [-m MD5] [-s] [-ns] [-r RANGE RANGE] [--uid UID] [--hashcat HASHCAT] [--backend-ignore-cuda] [--john JOHN]
+                             [--aicu] [-o OUTFILE]
 ```
 
 ```
@@ -219,8 +243,10 @@ optional arguments:
   --uid UID             获取指定UID的标准MD5和非标准MD5值。指定此参数时忽略其它参数
   --hashcat HASHCAT     使用指定的hashcat破解程序。
   --backend-ignore-cuda
-                        在运行hashcat时忽略CUDA。当使用CUDA导致hashcat运行失败，报错"Kernel ./OpenCL/shared.cl build failed."时可以使用此参数解决。
-  --john JOHN           使用指定的John the Ripper破解程序，注意，若john只能破解标准MD5，无法破解非标准的MD5，也就是说john只能破解在网页端点击视频分享按钮得到的视频分享链接。
+                        在运行hashcat时忽略CUDA。当使用CUDA导致hashcat运行失败，报错"Kernel ./OpenCL/shared.cl build failed."时可以使用此参数解决。    
+  --john JOHN           使用指定的John the Ripper破解程序，注意，若john只能破解标准MD5，无法破解非标准的MD5，也就是说john只能破解在网页端点击视频分享按
+钮得到的视频分享链接。
+  --aicu                指定直接调用aicu.cc网站的接口查询MD5或URL对应的UID，使用此参数时仅需提供--url或--md5参数即可。通过此方法仅能查询已存在账号的UID，若查询的MD5对应的UID是一个不存在的B站账号则返回结果为空。
   -o OUTFILE, --outfile OUTFILE
                         指定结果的保存路径。
 ```

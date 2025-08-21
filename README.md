@@ -53,7 +53,9 @@ cd bili-uid-crack-main
 pip install -r requirement.txt
 ```
 
-### 第2步：下载hashcat和（或）John the Ripper
+### 第3步：下载hashcat和（或）John the Ripper
+
+若仅使用在线查询aicu.cc接口破解UID的功能，则无须下载hashcat和John the Ripper。
 
 优先使用hashcat进行破解，若hashcat不可用可以使用John the Ripper平替。
 

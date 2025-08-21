@@ -343,6 +343,9 @@ class BiliUidCrack:
             md5 (str): 16进制MD5值。
             is_standard_md5 (bool): 指定是否为标准的MD5值。
             uid_ranges (List[UidRange], optional): 指定破解的UID范围，默认为所有可能的UID。
+
+        Returns:
+            int: 已破解的UID，若未破解则返回-1。
         """
         def hashcat_crack() -> Tuple[bool, int]:
             """运行hashcat进行破解。
@@ -447,12 +450,15 @@ class BiliUidCrack:
 
         return uid
 
-    def crack_from_url(self, url: str, uid_ranges: List[UidRange] = UID_RANGES_ALL):
+    def crack_from_url(self, url: str, uid_ranges: List[UidRange] = UID_RANGES_ALL) -> int:
         """根据B站网页端视频链接或视频分享链接破解UID。
 
         Args:
             url (str): 在用户已登录B站网页端的情况下得到的视频链接或视频分享链接。
             uid_ranges (List[UidRange], optional): 指定UID范围，默认为所有可能的UID。
+
+        Returns:
+            int: 已破解的UID，若未破解则返回-1。
         """
         if not check_crackable_url(url):
             return -1

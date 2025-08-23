@@ -8,7 +8,7 @@
 
 本工具支持两种方法破解：
 
-1. 在线调用aicu.cc网站的接口，直接查询MD5对应的UID。但请勿频繁查询aicu.cc接口，否则可能被风控。
+1. 在线调用aicu.cc网站的接口，直接查询MD5对应的UID。但可能有部分UID没有加入aicu.cc的数据库，如0级号，则无法通过在线查询得到，只能通过本地离线破解。另外，请勿频繁查询aicu.cc接口，以免被风控。
 
 2. 在本地离线运行hashcat和（或）John the Ripper进行破解，优先使用hashcat破解，若hashcat不可用则使用John the Ripper破解，但是John the Ripper只能用于破解标准MD5值。
 
@@ -129,7 +129,7 @@ hashcat -I
 python bili_uid_crack_cli.py --aicu --url "https://www.bilibili.com/video/BV1vQ4y1Z7C2/?share_source=copy_web&vd_source=c9c39ea43db536f5fc895e71c18e3a48"
 ```
 
-注意：请勿频繁查询aicu.cc接口，否则可能被风控。
+注意：此方法仅能查询已加入aicu.cc数据库的UID，若查询的MD5对应的UID未加入aicu.cc的数据库，如0级号的UID，或者是一个不存在的B站账号的UID则无法得到结果。而且此方法时效性有限，当有新UID生成但aicu.cc没有及时加入数据库时，也可能会导致无法查询得到结果。遇到以上情况时只能使用离线本地破解。
 
 - 离线本地破解
 
@@ -149,7 +149,7 @@ python bili_uid_crack_cli.py --url "https://www.bilibili.com/video/BV1vQ4y1Z7C2/
 python bili_uid_crack_cli.py --aicu --md5 c9c39ea43db536f5fc895e71c18e3a48
 ```
 
-注意：此方法仅能查询已存在账号的UID，若查询的MD5对应的UID是一个不存在的B站账号则无法得到结果。而且此方法时效性有限，当有新UID生成但aicu.cc没有及时加入数据库时，也可能会导致无法查询得到结果。
+注意：此方法仅能查询已加入aicu.cc数据库的UID，若查询的MD5对应的UID未加入aicu.cc的数据库，如0级号的UID，或者是一个不存在的B站账号的UID则无法得到结果。而且此方法时效性有限，当有新UID生成但aicu.cc没有及时加入数据库时，也可能会导致无法查询得到结果。遇到以上情况时只能使用离线本地破解。
 
 - 离线本地破解
 

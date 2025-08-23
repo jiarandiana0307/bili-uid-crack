@@ -6,7 +6,7 @@ import platform
 from typing import List, Optional
 from urllib.parse import urlparse, parse_qs
 
-import curl_cffi
+from curl_cffi import requests
 
 from .exceptions import *
 from .uid_range import UidRange
@@ -167,7 +167,7 @@ def query_uid_with_md5(md5: str, **kwargs) -> int:
 
     Args:
         md5 (str): 待查询的16进制MD5。
-        **kwargs: curl_cffi.request()的参数。
+        **kwargs: curl_cffi.requests.request()的参数。
 
     Raises:
         Exception: aicu.cc查询服务异常。
@@ -177,7 +177,7 @@ def query_uid_with_md5(md5: str, **kwargs) -> int:
     """
     uid = -1
     url = f'https://api.aicu.cc/api/v3/tool/hash2uid?hash={md5}'
-    response = curl_cffi.get(url, impersonate='chrome110', **kwargs)
+    response = requests.get(url, impersonate='chrome110', **kwargs)
     response.raise_for_status()
 
     if response.text != '':
@@ -191,7 +191,7 @@ def query_uid_with_url(url: str, **kwargs) -> int:
 
     Args:
         url (str): 网页端频链接或视频分享链接。
-        **kwargs: curl_cffi.request()的参数。
+        **kwargs: curl_cffi.requets.request()的参数。
 
     Returns:
         int: 返回查询得到的UID，若无则返回-1。

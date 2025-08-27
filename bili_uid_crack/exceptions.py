@@ -2,8 +2,18 @@ class HashcatNotFoundException(Exception):
     def __init__(self, *args):
         super().__init__(*args)
 
+        
+class FailedToRunHashcatException(Exception):
+    def __init__(self, *args):
+        super().__init__(*args)
+
 
 class JohnNotFoundException(Exception):
+    def __init__(self, *args):
+        super().__init__(*args)
+
+
+class FailedToRunJohnException(Exception):
     def __init__(self, *args):
         super().__init__(*args)
 

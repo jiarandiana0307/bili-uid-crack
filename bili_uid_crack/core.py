@@ -167,6 +167,10 @@ class BiliUidCrack:
                         mask = f"{prefix}{boundary_mask_end}?1{'?d' * (suffix_len - 1)}"
                         masks_and_charsets[mask] = [charset_near_boundary_of_end_uid]
 
+                    if len(masks_and_charsets) == 0:
+                        mask = f"{prefix}?1{'?d' * suffix_len}"
+                        masks_and_charsets[mask] = [boundary_charset]
+
                 else:
                     mask = f"{prefix}?1{'?d' * suffix_len}"
                     masks_and_charsets[mask] = [boundary_charset]
@@ -219,6 +223,10 @@ class BiliUidCrack:
                         mask = f"{hex_prefix}{boundary_mask_end:02d}?2{'?1' * (suffix_len - 1)}"
                         masks_and_charsets[mask] = [hex_charset, hex_charset_near_boundary_of_end_uid]
 
+                    if len(masks_and_charsets) == 0:
+                        mask = f"{hex_prefix}?2{'?1' * suffix_len}"
+                        masks_and_charsets[mask] = [hex_charset, boundary_hex_charset]
+
                 else:
                     mask = f"{hex_prefix}?2{'?1' * suffix_len}"
                     masks_and_charsets[mask] = [hex_charset, boundary_hex_charset]
@@ -238,28 +246,6 @@ class BiliUidCrack:
                 masks_and_charsets[mask] = [hex_charset, boundary_hex_charset]
         
         return masks_and_charsets
-
-    @staticmethod
-    def __generate_temp_hashcat_mask_file(masks_and_charsets: Dict[str, List[str]]) -> str:
-        """创建用于提供hashcat掩码的临时文件。
-
-        Args:
-            masks_and_charsets (Dict[str, List[str]]): 返回掩码和自定义字符集的映射，键为掩码，值为自定义字符串列表。
-
-        Returns:
-            str: 创建的临时文件路径。
-        """
-        with NamedTemporaryFile('w', encoding='utf-8', suffix='.txt', prefix='hashcat_masks_', delete=False) as fp:
-            maskfile = fp.name
-
-            masks_and_charsets_str = ''
-            for mask, charsets in masks_and_charsets.items():
-                if len(charsets) > 0:
-                    masks_and_charsets_str += ','.join(charsets) + ','
-                masks_and_charsets_str += mask + '\n'
-            fp.write(masks_and_charsets_str)
-
-        return maskfile
 
     @staticmethod
     def __read_uid_from_hashcat_outfile(outfile: str) -> int:
@@ -285,35 +271,6 @@ class BiliUidCrack:
             return -1
 
     @staticmethod
-    def __generate_temp_john_hash_file(md5: str) -> str:
-        """创建用于给john程序传入哈希值的临时文件。
-
-        Args:
-            md5 (str): 待破解的16进制MD5值。
-
-        Returns:
-            str: 创建的临时文件路径。
-        """
-        with NamedTemporaryFile('w', encoding='utf-8', suffix='.txt', prefix='john_hash_', delete=False) as fp:
-            hash_file = fp.name
-            fp.write(md5)
-
-        return hash_file
-
-    @staticmethod
-    def __generate_temp_john_pot_file() -> str:
-        """创建临时文件用于保存john程序的输出结果。
-
-        Returns:
-            str: 创建的临时文件路径。
-        """
-        with NamedTemporaryFile('w', encoding='utf-8', suffix='.txt', prefix='john_pot_', delete=False) as fp:
-            pot_file = fp.name
-            fp.write('')
-            
-        return pot_file
-
-    @staticmethod
     def __read_uid_from_john_pot_file(pot_file: str) -> int:
         """从john的输出文件中获取破解的UID，若无UID则返回-1。
 
@@ -329,6 +286,204 @@ class BiliUidCrack:
             return -1
         else:
             return int(text.split(':')[-1])
+
+    def hashcat_crack_md5(self, md5: str, is_standard_md5: bool, uid_ranges: List[UidRange] = UID_RANGES_ALL) -> int:
+        """使用hashcat破解MD5。
+
+        Args:
+            md5 (str): 16进制MD5值。
+            is_standard_md5 (bool): 指定是否为标准的MD5值。
+            uid_ranges (List[UidRange], optional): 指定破解的UID范围，默认为所有可能的UID。
+
+        Returns:
+            int: 已破解的UID，若未破解则返回-1。
+        """
+        if self.__hashcat is None:
+            raise HashcatNotFoundException()
+
+        # 设定一个UID阈值，将UID范围分为两部分，用于在Windows下对hashcat参数进行针对性的调整以优化性能
+        uid_threshold = 10_000_000_000
+
+        splited_uid_ranges = []
+        for uid_range in uid_ranges:
+            if uid_range.start < uid_threshold and uid_range.end >= uid_threshold:
+                # 将包含UID阈值的范围拆分为小于和大等于该阈值的范围
+                splited_uid_ranges.append(UidRange(uid_range.start, uid_threshold-1))
+                splited_uid_ranges.append(UidRange(uid_threshold, uid_range.end))
+            else:
+                splited_uid_ranges.append(uid_range)
+
+        # 创建必要的临时文件
+        temp_files = []
+        prefixes = ['hashcat_outfile_', 'hashcat_hash_', 'hashcat_wordlist_', 'hashcat_masks_']
+        for prefix in prefixes:
+            with NamedTemporaryFile('w', encoding='utf-8', suffix='.txt', prefix=prefix, delete=False) as fp:
+                temp_files.append(fp.name)
+                if prefix == 'hashcat_hash_':
+                    fp.write(md5)
+        out_file, hash_file, wordlist_file, maskfile = temp_files
+
+        uid = -1
+        try:
+            for uid_range in splited_uid_ranges:
+                # 当遇到16位UID时利用16位UID的分布规律进行破解
+                if (uid_range.start >= UID16_START
+                        and len(str(uid_range.start)) == 16
+                        and len(str(uid_range.end)) == 16):
+                    # 指定UID范围内的第一个UID分布区间的起点
+                    first_interval_start = UID16_START + (uid_range.start - UID16_START) // UID16_STEP * UID16_STEP
+                    # 指定UID范围内的最后一个UID分布区间的起点
+                    last_interval_start = UID16_START + (uid_range.end - UID16_START) // UID16_STEP * UID16_STEP
+                    # 指定UID范围内存在的UID分布区间数量
+                    interval_count = (last_interval_start - first_interval_start) / UID16_STEP + 1
+                    # 将指定UID范围分成多段UID进行处理，此为UID段的数量
+                    segment_count = int(interval_count / UID16_MAX_INTERVAL_NUM) + (0 if interval_count % UID16_MAX_INTERVAL_NUM == 0 else 1)
+                    # 每个UID段的跨度
+                    segment_span = UID16_STEP * UID16_MAX_INTERVAL_NUM
+
+                    for i in range(segment_count):
+                        start = first_interval_start + i * segment_span
+                        end = start + segment_span if (last_interval_start - start) / UID16_STEP + 1 >= UID16_MAX_INTERVAL_NUM else last_interval_start + UID16_STEP
+
+                        if is_standard_md5:
+                            uid16_list = [str(range_start+i) for i in range(UID16_INTERVAL_LEN) for range_start in range(start, end, UID16_STEP)]
+                        else:
+                            uid16_list = ['0'+'0'.join(str(range_start+i)) for i in range(UID16_INTERVAL_LEN) for range_start in range(start, end, UID16_STEP)]
+                        uid16_wordlist = '\n'.join(uid16_list)
+
+                        with open(wordlist_file, 'w', encoding='utf-8') as fp:
+                            fp.write(uid16_wordlist)
+
+                        hashcat_cmd = f"\"{self.__hashcat}\" -m 0 -a 0 {'' if is_standard_md5 else '--hex-wordlist'} --outfile-format 2 --outfile \"{out_file}\" {'--backend-ignore-cuda' if self.__backend_ignore_cuda else ''} --potfile-disable --logfile-disable -O --hwmon-disable \"{hash_file}\" \"{wordlist_file}\""
+                        process = subprocess.run(shlex.split(hashcat_cmd), cwd=os.path.split(self.__hashcat)[0])
+
+                        if process.returncode not in [0, 1]:
+                            raise FailedToRunHashcatException(f'错误码:{process.returncode}')
+
+                        uid = BiliUidCrack.__read_uid_from_hashcat_outfile(out_file)
+                        if uid > 0:
+                            break
+                        
+                    if uid > 0:
+                        break
+
+                else:
+                    masks_and_charsets = BiliUidCrack.get_masks_and_charsets(is_standard_md5, uid_range)
+                    workload_profile = 4
+                    if platform.system() == 'Windows' and uid_range.end < uid_threshold:
+                        workload_profile = 1
+
+                    masks_and_charsets_str = ''
+                    for mask, charsets in masks_and_charsets.items():
+                        if len(charsets) > 0:
+                            masks_and_charsets_str += ','.join(charsets) + ','
+                        masks_and_charsets_str += mask + '\n'
+
+                    with open(maskfile, 'w', encoding='utf-8') as fp:
+                        fp.write(masks_and_charsets_str)
+
+                    hashcat_cmd = f"\"{self.__hashcat}\" -m 0 -a 3 {'' if is_standard_md5 else '--hex-charset'} --outfile-format 2 --outfile \"{out_file}\" {'--backend-ignore-cuda' if self.__backend_ignore_cuda else ''} --potfile-disable --logfile-disable -O -w {workload_profile} --hwmon-disable {md5} \"{maskfile}\""
+                    process = subprocess.run(shlex.split(hashcat_cmd), cwd=os.path.split(self.__hashcat)[0])
+
+                    if process.returncode not in [0, 1]:
+                        raise FailedToRunHashcatException(f'错误码:{process.returncode}')
+
+                    uid = BiliUidCrack.__read_uid_from_hashcat_outfile(out_file)
+                    if uid > 0:
+                        break
+
+        finally:
+            for file in temp_files:
+                if os.path.exists(file):
+                    os.remove(file)
+
+        return uid
+
+    def john_crack_md5(self, md5: str, uid_ranges: List[UidRange] = UID_RANGES_ALL) -> int:
+        """使用John the Ripper破解MD5。
+
+        Args:
+            md5 (str): 16进制MD5值。
+            uid_ranges (List[UidRange], optional): 指定破解的UID范围，默认为所有可能的UID。
+
+        Returns:
+            int: 已破解的UID，若未破解则返回-1。
+        """
+        if self.__john is None:
+            raise JohnNotFoundException()
+
+        temp_files = []
+        prefixes = ['john_pot_', 'john_wordlist_', 'john_hash_']
+        for prefix in prefixes:
+            with NamedTemporaryFile('w', encoding='utf-8', suffix='.txt', prefix=prefix, delete=False) as fp:
+                temp_files.append(fp.name)
+                if prefix == 'john_hash_':
+                    fp.write(md5)
+        pot_file, wordlist_file, hash_file = temp_files
+
+        uid = -1
+        try:
+            for uid_range in uid_ranges:
+                # 当遇到16位UID时利用16位UID的分布规律进行破解
+                if (uid_range.start >= UID16_START
+                        and len(str(uid_range.start)) == 16
+                        and len(str(uid_range.end)) == 16):
+                    # 指定UID范围内的第一个UID分布区间的起点
+                    first_interval_start = UID16_START + (uid_range.start - UID16_START) // UID16_STEP * UID16_STEP
+                    # 指定UID范围内的最后一个UID分布区间的起点
+                    last_interval_start = UID16_START + (uid_range.end - UID16_START) // UID16_STEP * UID16_STEP
+                    # 指定UID范围内存在的UID分布区间数量
+                    interval_count = (last_interval_start - first_interval_start) / UID16_STEP + 1
+                    # 将指定UID范围分成多段UID进行处理，此为UID段的数量
+                    segment_count = int(interval_count / UID16_MAX_INTERVAL_NUM) + (0 if interval_count % UID16_MAX_INTERVAL_NUM == 0 else 1)
+                    # 每个UID段的跨度
+                    segment_span = UID16_STEP * UID16_MAX_INTERVAL_NUM
+
+                    for i in range(segment_count):
+                        start = first_interval_start + i * segment_span
+                        end = start + segment_span if (last_interval_start - start) / UID16_STEP + 1 >= UID16_MAX_INTERVAL_NUM else last_interval_start + UID16_STEP
+
+                        uid16_list = [str(range_start+i) for i in range(UID16_INTERVAL_LEN) for range_start in range(start, end, UID16_STEP)]
+                        uid16_wordlist = '\n'.join(uid16_list)
+                        with open(wordlist_file, 'w', encoding='utf-8') as fp:
+                            fp.write(uid16_wordlist)
+
+                        john_cmd = f'"{self.__john}" --format=raw-md5 --wordlist="{wordlist_file}" --pot="{pot_file}" "{hash_file}"'
+                        process = subprocess.run(shlex.split(john_cmd), cwd=os.path.split(self.__john)[0])
+
+                        if process.returncode != 0:
+                            raise FailedToRunJohnException(f'错误码:{process.returncode}')
+
+                        uid = BiliUidCrack.__read_uid_from_john_pot_file(pot_file)
+                        if uid > 0:
+                            break
+                        
+                    if uid > 0:
+                        break
+
+                else:
+                    masks_and_charsets = BiliUidCrack.get_masks_and_charsets(True, uid_range)
+                    for mask, charsets in masks_and_charsets.items():
+                        charsets_str = ' '.join([f'-{i+1}=\"{charset}\"' for i, charset in enumerate(charsets)])
+                        john_cmd = f'"{self.__john}" --format=raw-md5 {charsets_str} --mask="{mask}" --pot="{pot_file}" "{hash_file}"'
+                        process = subprocess.run(shlex.split(john_cmd), cwd=os.path.split(self.__john)[0])
+
+                        if process.returncode != 0:
+                            raise FailedToRunJohnException(f'错误码:{process.returncode}')
+
+                        uid = BiliUidCrack.__read_uid_from_john_pot_file(pot_file)
+                        if uid > 0:
+                            break
+
+                    if uid > 0:
+                        break
+
+        finally:
+            for file in temp_files:
+                if os.path.exists(file):
+                    os.remove(file)
+
+        return uid
 
     def crack_from_md5(self, md5: str, is_standard_md5: bool, uid_ranges: List[UidRange] = UID_RANGES_ALL) -> int:
         """根据MD5破解UID。
@@ -347,105 +502,26 @@ class BiliUidCrack:
         Returns:
             int: 已破解的UID，若未破解则返回-1。
         """
-        def hashcat_crack() -> Tuple[bool, int]:
-            """运行hashcat进行破解。
-
-            Returns:
-                Tuple[bool, int]: 程序运行状态和UID。第一个值程序正常运行且无报错则返回True，运行失败返回False。
-            """
-            if self.__hashcat is None:
-                False, -1
-
-            with NamedTemporaryFile('w', encoding='utf-8', suffix='.txt', prefix='hashcat_outfile_', delete=False) as outfile_fp:
-                outfile = outfile_fp.name
-
-            uid_threshold = 10_000_000_000
-            splited_uid_ranges = []
-            for uid_range in uid_ranges:
-                if uid_range.start < uid_threshold and uid_range.end >= uid_threshold:
-                    # 将包含UID阈值的范围拆分为小于和大等于该阈值的范围
-                    splited_uid_ranges.append(UidRange(uid_range.start, uid_threshold-1))
-                    splited_uid_ranges.append(UidRange(uid_threshold, uid_range.end))
-                else:
-                    splited_uid_ranges.append(uid_range)
-
-            returncode = 0
-            for uid_range in splited_uid_ranges:
-                masks_and_charsets = BiliUidCrack.get_masks_and_charsets(is_standard_md5, uid_range)
-                maskfile = BiliUidCrack.__generate_temp_hashcat_mask_file(masks_and_charsets)
-                workload_profile = 4
-                if platform.system() == 'Windows' and uid_range.end < uid_threshold:
-                    workload_profile = 1
-
-                hashcat_cmd = f"\"{self.__hashcat}\" -m 0 -a 3 {'' if is_standard_md5 else '--hex-charset'} --outfile-format 2 --outfile \"{outfile}\" {'--backend-ignore-cuda' if self.__backend_ignore_cuda else ''} --potfile-disable --logfile-disable -O -w {workload_profile} --hwmon-disable {md5} \"{maskfile}\""
-                process = subprocess.run(shlex.split(hashcat_cmd), cwd=os.path.split(self.__hashcat)[0])
-                returncode = process.returncode
-
-                if os.path.exists(maskfile):
-                    os.remove(maskfile)
-
-                uid = BiliUidCrack.__read_uid_from_hashcat_outfile(outfile)
-                if returncode not in [0, 1] or uid > 0:
-                    break
-
-            if os.path.exists(outfile):
-                os.remove(outfile)
-
-            return (True, uid) if returncode in [0, 1] else (False, -1)
-
-        def john_crack() -> Tuple[bool, int]:
-            """运行john进行破解。
-
-            Returns:
-                Tuple[bool, int]: 程序运行状态和UID。第一个值程序正常运行且无报错则返回True，运行失败返回False。
-            """
-            if self.__john is None:
-                return False, -1
-
-            if not is_standard_md5:
-                raise JohnCrackNonStandardMd5Exception('john不支持破解非标准MD5')
-
-            pot_file = BiliUidCrack.__generate_temp_john_pot_file()
-
-            masks_and_charsets = {}
-            for uid_range in uid_ranges:
-                masks_and_charsets.update(BiliUidCrack.get_masks_and_charsets(is_standard_md5, uid_range))
-
-            uid = -1
-            for mask, charsets in masks_and_charsets.items():
-                john_hash_file = BiliUidCrack.__generate_temp_john_hash_file(md5)
-                charsets_str = ' '.join([f'-{i+1}=\"{charset}\"' for i, charset in enumerate(charsets)])
-                john_cmd = f'"{self.__john}" --format=raw-md5 {charsets_str} --mask="{mask}" --pot="{pot_file}" "{john_hash_file}"'
-                process = subprocess.run(shlex.split(john_cmd), cwd=os.path.split(self.__john)[0])
-
-                if process.returncode != 0:
-                    if os.path.exists(pot_file):
-                        os.remove(pot_file)
-                    return False, -1
-
-                uid = BiliUidCrack.__read_uid_from_john_pot_file(pot_file)
-
-                if uid > 0:
-                    break
-
-            if os.path.exists(pot_file):
-                os.remove(pot_file)
-
-            return True, uid
-
-        if not check_md5(md5):
-            return -1
-
-        uid_ranges = merge_uid_ranges(uid_ranges)
-
         uid = -1
-        status = False
+        is_hashcat_success = False
+        is_john_success = False
         if self.__hashcat:
-            status, uid = hashcat_crack()
-        if self.__john and not status:
-            status, uid = john_crack()
+            try:
+                uid = self.hashcat_crack_md5(md5, is_standard_md5, uid_ranges)
+                is_hashcat_success = True
+            except:
+                pass
 
-        if not status:
+        if self.__john and not is_hashcat_success:
+            if not is_standard_md5:
+                raise JohnCrackNonStandardMd5Exception()
+            try:
+                uid = self.john_crack_md5(md5, uid_ranges)
+                is_john_success = True
+            except:
+                pass
+
+        if not is_hashcat_success and not is_john_success:
             raise NoAvailableCrackerException()
 
         return uid
